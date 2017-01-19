@@ -183,10 +183,13 @@ Export-ModuleMember -Function Logout-OTWMS
 #Sets $global:LoginGuid and returns LoginGuid
 function Login-OTWMS {
     param(
-        [Parameter(Mandatory=$True)][string] $Username,
-        [Parameter(Mandatory=$True)][string] $Password,
+        [Parameter(Mandatory=$False)][string] $Username,
+        [Parameter(Mandatory=$False)][string] $Password,
         [Parameter(Mandatory=$True)][string] $ServerHostname
     )
+    # Couldn't get digest authentication working, so just setting this logic for now.
+    $Digest = $false
+
 
     if($global:OTWMSLoginGuid) {
         Logout-OTWMS -LoginGuid $global:OTWMSLoginGuid
@@ -196,11 +199,21 @@ function Login-OTWMS {
         Identify-OTWMS-Version -ServerHostname $ServerHostname
     }
     
+    # If neither credential entered, launch to an interactive prompt
+    if(!$Username -or !$Password) {
+        if(!$Username) {
+            $Username = $env:USERNAME
+        }
+        
+        $cred = Get-Credential -Message "Credentials for OTWSM on $ServerHostname" -UserName $Username
+        $Password = $cred.GetNetworkCredential().password
+    }
+    
     if($Digest -eq $True) {
         $LoginString = "<ADMINISTRATION action=`"login`" digest=`"1`">Public Digest</ADMINISTRATION>"
     }
     else {
-        $LoginString = "<ADMINISTRATION action=`"login`" name=`"$username`" password=`"$password`"/>"
+        $LoginString = "<ADMINISTRATION action=`"login`" name=`"$Username`" password=`"$Password`"/>"
     }
     
     try {
@@ -222,7 +235,7 @@ function Login-OTWMS {
 Export-ModuleMember -Function Login-OTWMS
 
 function Get-OTWMS-Projects {
-    $ListOfProjects = Execute-OTWMS-RQL -RQLString "<IODATA loginguid='$global:OTWMSLoginGuid'><ADMINISTRATION><PROJECTS action='list'/></ADMINISTRATION></IODATA>"
+    $ListOfProjects = Execute-OTWMS-RQL -RQLString "<ADMINISTRATION><PROJECTS action='list'/></ADMINISTRATION>"
     $ListOfProjects.IODATA.PROJECTS | %{$_.PROJECT} | Select guid,name,testproject,locked
 }
 Export-ModuleMember -Function Get-OTWMS-Projects
