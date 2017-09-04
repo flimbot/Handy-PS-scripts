@@ -34,3 +34,8 @@ cp AGOL.psm1 ($moduledir + "\AGOL\AGOL.psm1")
  - Get-OTWMS-Projects 
  - Open-OTWMS-Session
  - Open-OTWMS-Project
+ 
+## MortgageChoiceBanking - Abstraction to start scripting against the banking REST interface
+I started some work on introducing a new module for Mortgage Choice online banking, which I use for some of my accounts.
+It's only scratching the surface, but hoping to turn it into a script abstraction to start automating some payments.
+It's also a test if everything is accessible using PowerShell (easier for me) to later develop again in TypeScript / Ionic.
