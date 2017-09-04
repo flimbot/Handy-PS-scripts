@@ -1,9 +1,49 @@
-$mcSession = $null
+﻿$mcSession = $null
 $mcDomain = "https://online.mortgagechoice.com.au"
 
-function Login-MortgageChoice([string]$username,[password]$password) {
-    Invoke-RestMethod -Method Post -Uri "$mcDomain/pkmslogin.form" -Body @{'username'=$username; 'password'=$password; 'login-form-type'='pwd'} -SessionVariable mcSession
+function Login-MortgageChoice {
+    Param(
+        [Parameter(Mandatory=$true)][ValidatePattern("^\d{8}$")][String]$username,
+        [Parameter(Mandatory=$true)][String]$password
+    )
+
+    $headers = @{
+        #'referrer'= "$mcDomain/sepas/serve?TAM_OP=login&USERNAME=unauthenticated&ERROR_CODE=0x00000000&URL=%2Fmortgagechoice-online&HOSTNAME=online.mortgagechoice.com.au&PROTOCOL=https";
+        'content-type'='application/x-www-form-urlencoded';
+        'DNT'='1';
+    } 
+        $result = Invoke-WebRequest -Method Post -Uri "$mcDomain/pkmslogin.form" -Body @{'username'=$username; 'password'=$password; 'login-form-type'='pwd'} -SessionVariable mcSession -Headers $headers -UseBasicParsing -MaximumRedirection 0 -ErrorAction Ignore
+
+    if($result.StatusCode -eq 302) {
+        $p3p = $result.headers['P3P']
+        $redirParams = @{}
+        $result.headers['location'] | ?{$_ -match '\?(.+)$'} | %{$matches[1] -split '&'} | %{
+            $a = @($_ -split '=')
+            $redirParams[$a[0]] = $a[1];
+        }
+
+        if($redirParams['ERROR_CODE'] -ne '0x00000000') {
+            $result.Content -match '\<h3\>(.+)\<\/h3\>' | %{$matches}
+            throw $redirParams
+        }
+        else {
+            Invoke-WebRequest -Method Post -Uri "$mcDomain/pkmslogin.form" -Body @{'username'=$username; 'password'=$password; 'login-form-type'='pwd'} -WebSession $mcSession -Headers $headers -UseBasicParsing -MaximumRedirection 0 -ErrorAction Ignore
+        }
+    }
+    
+    if( $result.Content -match '\<h[1-3]\>(.+)\<\/h[1-3]\>' ) {
+        throw $matches[1]
+    }
+    else {
+        $result
+    }
+
+    #$result = Invoke-RestMethod -Method Post -Uri "$mcDomain/pkmslogin.form" -Body @{'username'=$username; 'password'=$password; 'login-form-type'='pwd'} -SessionVariable mcSession -Headers $headers
+    #Invoke-WebRequest -Method Post -Uri "$mcDomain/pkmslogin.form" -Body @{'username'=$username; 'password'=$password; 'login-form-type'='pwd'} -SessionVariable mcSession -UseBasicParsing
 }
+#$test = Login-MortgageChoice -username '89295383' -password '12345678'
+
+
 
 function Logout-MortgageChoice {
     Invoke-RestMethod -Method Get -WebSession $mcSession -Uri "$mcDomain/pkmslogout"
@@ -83,7 +123,7 @@ function Get-MortgageChoice-Payees {
 
 try {
     Get-Credential -Message 'Please enter online banking login' | %{
-        Login-MortgageChoice -username $_.UserName -password ($_.GetNetworkCredential().password)
+        $loginresult = Login-MortgageChoice -username $_.UserName -password ($_.GetNetworkCredential().password)
         $accounts = Get-MortgageChoice-Accounts
         $accounts
     }
@@ -95,3 +135,4 @@ catch [Exception] {
 finally {
     Logout-MortgageChoice
 }
+

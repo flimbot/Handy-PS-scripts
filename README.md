@@ -35,7 +35,12 @@ cp AGOL.psm1 ($moduledir + "\AGOL\AGOL.psm1")
  - Open-OTWMS-Session
  - Open-OTWMS-Project
  
-## MortgageChoiceBanking - Abstraction to start scripting against the banking REST interface
+## MortgageChoiceBanking - Access to accounts in Mortgage Choice
+** In development - Not a module yet **
 I started some work on introducing a new module for Mortgage Choice online banking, which I use for some of my accounts.
 It's only scratching the surface, but hoping to turn it into a script abstraction to start automating some payments.
 It's also a test if everything is accessible using PowerShell (easier for me) to later develop again in TypeScript / Ionic.
+
+# Authentication
+A little googling of some parameters in URLs lead me to discover that Mortgage Choice uses [Tivoli Access Manager](https://en.wikipedia.org/wiki/IBM_Tivoli_Access_Manager) at least for the authentication at the login screen.
+Source which brought me to the conclusion: http://www-01.ibm.com/support/docview.wss?uid=swg1IY90727
