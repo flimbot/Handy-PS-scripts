@@ -227,10 +227,11 @@ function Login-OTWSMS {
     try {
         $LoginResult = Execute-OTWSMS-RQL -RQLString $LoginString
 
-        $LoginResult.IODATA.LOGIN.guid | ?{$_ -match "^([0-9A-F]+)" } | %{$matches[1]}
+        #$LoginResult.IODATA.LOGIN.guid | ?{$_ -match "^([0-9A-F]+)" } | %{$matches[1]}
         $global:OTWSMSLoginGuid = $LoginResult.IODATA.LOGIN.guid | ?{$_ -match "^([0-9A-F]+)" } | %{$matches[1]}
         $global:OTWSMSSessionKey = $LoginResult.IODATA.LOGIN.guid | ?{$_ -match "^([0-9A-F]+)" } | %{$matches[1]}
-        $global:OTWSMSLoginGuid
+        
+        Write-Verbose "Logged in: $global:OTWSMSLoginGuid"
     }
     catch [Exception] {
         $ExceptionMessage = $_.Exception.Message
@@ -254,7 +255,7 @@ function Open-OTWSMS-Session {
         [Parameter(Mandatory=$True)][ValidateScript({$_ -match "^[0-9A-F]{32}$"})][string] $ProjectGuid
     )    
     $ValidateResult = Execute-OTWSMS-RQL -RQLString "<ADMINISTRATION action='validate' guid='$global:OTWSMSLoginGuid'><PROJECT guid='$ProjectGuid' /></ADMINISTRATION>"
-    $ValidateResult.IODATA.SERVER.key
+    Write-Verbose "Opened session: $($ValidateResult.IODATA.SERVER.key)"
 } 
 Export-ModuleMember -Function Open-OTWSMS-Session
 
@@ -262,10 +263,7 @@ function Open-OTWSMS-Project {
     param(
         [Parameter(Mandatory=$True)][string] $ProjectName
     )
-    $resp = Get-OTWSMS-Projects -Verbose | ?{$_.name -eq $ProjectName} | %{ Open-OTWSMS-Session -ProjectGuid $_.guid }
-    if(!$resp) {
-        Throw 'Cannot open project'
-    }
+    Get-OTWSMS-Projects | ?{$_.name -eq $ProjectName} | %{ Open-OTWSMS-Session -ProjectGuid $_.guid }
 }
 Export-ModuleMember -Function Open-OTWSMS-Project
 
@@ -348,32 +346,12 @@ Function Get-OTWSMS-AsyncJobs {
 }
 Export-ModuleMember -Function Load-OTWSMS-AsyncJobs
 
-function Get-OTWSMS-LinkingAppearance {
-    param(
-        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
-    )
-
-	$Links = Execute-OTWSMS-RQL -RQLString "<PAGE guid=`"$PageGuid`"><LINKSFROM action=`"load`"/></PAGE>"
-    $Links.IODATA.LINKSFROM.LINK
-}
-Export-ModuleMember -Function Get-OTWSMS-LinkingAppearance
-
-function Get-OTWSMS-Page {
-    param(
-        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
-        #[Parameter(Mandatory=$False)][ValidateScript({$_ -match $GuidRegex})][int]$PageID
-    )
-    
-	$Page = Execute-OTWSMS-RQL -RQLString "<PAGE action=`"load`" guid=`"$PageGuid`" option=`"extendedinfo`"/>"
-    $Page.IODATA.PAGE
-}
-Export-ModuleMember -Function Get-OTWSMS-Page
-
 function Get-OTWSMS-Pages {
     #Based on RQL of PAGE/xsearch
     param(
         [Parameter(Mandatory=$False)][ValidateRange(1,60)][int] $PageSize,
         [Parameter(Mandatory=$False)][int] $MaxHits,
+        [Parameter(Mandatory=$False)][int] $PageId,
 		[Parameter(Mandatory=$False)][ValidateSet("linked","unlinked","recyclebin","active","all")][String] $SpecialPageType,        
         [Parameter(Mandatory=$False)][ValidateSet("checkedout","waitingforrelease","waitingforcorrection","pagesinworkflow","resubmitted","released")][String] $PageState
     )
@@ -382,6 +360,10 @@ function Get-OTWSMS-Pages {
     
     if($PageSize) { $req.PAGE.pagesize = $PageSize }
     if($MaxHits)  { $req.PAGE.maxhits = $MaxHits }
+
+    if($PageId) {
+        $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"pageid`" value=`"" + $PageId + "`" operator=`"eq`" displayvalue=`"`"></SEARCHITEM>"
+    }
 
     if($SpecialPageType) {
         $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"specialpages`" value=`"$SpecialPageType`" operator=`"eq`"/>"
@@ -415,3 +397,61 @@ function Get-OTWSMS-Pages {
 	$ret | ?{$_.guid}
 }
 Export-ModuleMember -Function Get-OTWSMS-Pages
+
+function Get-OTWSMS-Page {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
+        #[Parameter(Mandatory=$False)][ValidateScript({$_ -match $GuidRegex})][int]$PageID
+    )
+    
+	$Page = Execute-OTWSMS-RQL -RQLString "<PAGE action=`"load`" guid=`"$PageGuid`" option=`"extendedinfo`"/>"
+    $Page.IODATA.PAGE
+}
+Export-ModuleMember -Function Get-OTWSMS-Page
+
+function Remove-OTWSMS-PageConnection {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid,
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$ListGuid
+    )
+    
+	$Page = Execute-OTWSMS-RQL -RQLString "<LINK action=`"unlink`" guid=`"$ListGuid`"><PAGE guid=`"$PageGuid`"/></LINK>"
+    $Page.IODATA
+}
+Export-ModuleMember -Function Disconnect-OTWSMS-Page
+
+function Add-OTWSMS-PageConnection {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid,
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$ListGuid
+    )
+    
+	$Page = Execute-OTWSMS-RQL -RQLString "<LINKSFROM action=`"save`" pageid=`"`" guid=`"$ListGuid`" reddotcacheguid=`"`"><LINK guid=`"$ListGuid`"/></LINKSFROM>"
+    $Page.IODATA
+}
+Export-ModuleMember -Function Disconnect-OTWSMS-Page
+
+#Where this page is connected (i.e. parent pages)
+function Get-OTWSMS-ConnectionToPage {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
+    )
+    
+	$Page = Execute-OTWSMS-RQL -RQLString "<PAGE guid='$PageGuid'><LINKSFROM action='load' /></PAGE>"
+    $Page.IODATA.LINKSFROM.LINK | Select PageGuid,PageId,PageHeadline,eltname,elttype,guid,isreference,islink
+}
+Export-ModuleMember -Function Get-OTWSMS-ConnectionToPage
+
+#Connections from this page (i.e. child pages)
+function Get-OTWSMS-ConnectionFromPage {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
+    )
+    
+	$Page = Execute-OTWSMS-RQL -RQLString "<PAGE guid='$PageGuid'><LINKS action='load' /></PAGE>"
+    $Page.IODATA.PAGE.LINKS.LINK | %{
+        $link = $_
+        Execute-OTWSMS-RQL -RQLString "<LINK guid='$($link.guid)'><PAGES action='list'/></LINK>" | %{ $_.IODATA.PAGES.PAGE } | Select headline,@{Name="PageGuid";Expression={$_.guid}}, @{Name="PageId";Expression={$_.id}}, @{Name="LinkGuid";Expression={$link.guid}}, @{Name="LinkName";Expression={$link.eltname}}, @{Name="ParentPageGuid";Expression={$PageGuid}}
+    }
+}
+Export-ModuleMember -Function Get-OTWSMS-ConnectionFromPage
