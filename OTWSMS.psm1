@@ -16,17 +16,17 @@ try { Add-Type -TypeDefinition @"
    [System.Flags]
    public enum OTWSMSPageFlags
    {
- NotBreadcrumb = 4,
- WaitingForRelease = 64,
- RequiresTranslation = 1024,
- UnlinkedPage = 8192,
- RequiredCorrection = 131072,
- Draft = 262144,
- Released = 524288,
- BreadcrumbStartPoint = 2097152,
- ExternalUrlOrLink = 8388608,
- OwnPageWaitingForRelease = 134217728,
- Locked = 268435456
+     NotBreadcrumb = 4,
+     WaitingForRelease = 64,
+     RequiresTranslation = 1024,
+     UnlinkedPage = 8192,
+     RequiredCorrection = 131072,
+     Draft = 262144,
+     Released = 524288,
+     BreadcrumbStartPoint = 2097152,
+     ExternalUrlOrLink = 8388608,
+     OwnPageWaitingForRelease = 134217728,
+     Locked = 268435456
    }
 "@ } catch{}
 
@@ -185,6 +185,7 @@ function Logout-OTWSMS {
 
     $global:OTWSMSLoginGuid  = $NULL
     $global:OTWSMSSessionKey = $NULL
+    $global:OTWSMSProjectGuid = $NULL
 }
 Export-ModuleMember -Function Logout-OTWSMS
 
@@ -255,6 +256,7 @@ function Open-OTWSMS-Session {
         [Parameter(Mandatory=$True)][ValidateScript({$_ -match "^[0-9A-F]{32}$"})][string] $ProjectGuid
     )    
     $ValidateResult = Execute-OTWSMS-RQL -RQLString "<ADMINISTRATION action='validate' guid='$global:OTWSMSLoginGuid'><PROJECT guid='$ProjectGuid' /></ADMINISTRATION>"
+    $global:OTWSMSProjectGuid = $ProjectGuid
     Write-Verbose "Opened session: $($ValidateResult.IODATA.SERVER.key)"
 } 
 Export-ModuleMember -Function Open-OTWSMS-Session
@@ -273,7 +275,7 @@ Function Get-OTWSMS-PagePreview {
 		[Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
     )
 
-    Execute-OTWSMS-RQL -RQLString "<PREVIEW projectguid=`"$ProjectGuid`" loginguid=`"$($global:OTWSMSLoginGuid)`" url=`"/CMS/ioRD.asp`" querystring=`"Action=Preview&amp;Pageguid=$PageGuid`" />"
+    Execute-OTWSMS-RQL -RQLString "<PREVIEW projectguid=`"$($global:OTWSMSProjectGuid)`" loginguid=`"$($global:OTWSMSLoginGuid)`" url=`"/CMS/ioRD.asp`" querystring=`"Action=Preview&amp;Pageguid=$PageGuid`" />"
 }
 Export-ModuleMember -Function Get-OTWSMS-PagePreview
 
@@ -350,7 +352,7 @@ function Get-OTWSMS-Pages {
     #Based on RQL of PAGE/xsearch
     param(
         [Parameter(Mandatory=$False)][ValidateRange(1,60)][int] $PageSize,
-        [Parameter(Mandatory=$False)][int] $MaxHits,
+        [Parameter(Mandatory=$False)][ValidateRange(1,500)][int] $MaxHits,
         [Parameter(Mandatory=$False)][int] $PageId,
 		[Parameter(Mandatory=$False)][ValidateSet("linked","unlinked","recyclebin","active","all")][String] $SpecialPageType,        
         [Parameter(Mandatory=$False)][ValidateSet("checkedout","waitingforrelease","waitingforcorrection","pagesinworkflow","resubmitted","released")][String] $PageState
@@ -358,8 +360,8 @@ function Get-OTWSMS-Pages {
     
     $req = [xml]"<PAGE action=`"xsearch`" orderby=`"headline`" orderdirection=`"ASC`" pagesize=`"60`" maxhits=`"60`" page=`"1`"><SEARCHITEMS></SEARCHITEMS></PAGE>"
     
-    if($PageSize) { $req.PAGE.pagesize = $PageSize }
-    if($MaxHits)  { $req.PAGE.maxhits = $MaxHits }
+    if($PageSize) { $req.PAGE.pagesize = $PageSize.ToString() }
+    if($MaxHits)  { $req.PAGE.maxhits = $MaxHits.ToString() }
 
     if($PageId) {
         $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"pageid`" value=`"" + $PageId + "`" operator=`"eq`" displayvalue=`"`"></SEARCHITEM>"
@@ -383,18 +385,18 @@ function Get-OTWSMS-Pages {
         return
     }
     
-    $ret = @()
-    $ListOfPages.IODATA.PAGES.PAGE | %{$ret += $_}
+    #$ret = @()
+    $ListOfPages.IODATA.PAGES.PAGE | ?{$_.guid}
     
     $loops = [math]::ceiling([int]($ListOfPages.IODATA.PAGES.hits) / [int]($ListOfPages.IODATA.PAGES.pagesize))
 
     for($i=2;$i -lt $loops;$i++) {
-        $req.IODATA.PAGE.SetAttribute("page",$i)
+        $req.PAGE.SetAttribute("page",$i.ToString())
         $ListOfPages = Execute-OTWSMS-RQL -RQLString $req.OuterXml
-        $ListOfPages.IODATA.PAGES.PAGE | %{$ret += $_}
+        $ListOfPages.IODATA.PAGES.PAGE | ?{$_.guid}
     }
 
-	$ret | ?{$_.guid}
+	#$ret
 }
 Export-ModuleMember -Function Get-OTWSMS-Pages
 
@@ -455,3 +457,37 @@ function Get-OTWSMS-ConnectionFromPage {
     }
 }
 Export-ModuleMember -Function Get-OTWSMS-ConnectionFromPage
+
+function Remove-OTWSMS-Page {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid,
+        [switch]$Permanently
+    )
+    
+	$resp = Execute-OTWSMS-RQL -RQLString "<PAGE action='delete' guid='$PageGuid'/>"
+    if( $resp.IODATA -notmatch '\s*ok\s*' ) {
+        if( $resp.IODATA -match '^\s*$' ) {
+            throw 'no page to remove'
+        }
+        else {
+            throw (Resolve-OTWSMS-Error -ErrorText $resp.IODATA)
+        }
+    }
+
+    if( $Permanently ) {
+        Remove-OTWSMS-PagePermanently -PageGuid $PageGuid
+    }
+}
+Export-ModuleMember -Function Remove-OTWSMS-Page
+
+function Remove-OTWSMS-PagePermanently {
+    param(
+        [Parameter(Mandatory=$True)][ValidateScript({$_ -match $GuidRegex})][string]$PageGuid
+    )
+    
+	$resp = Execute-OTWSMS-RQL -RQLString "<PAGE action='deletefinally' guid='$PageGuid' />"
+    if( $resp.IODATA -ne 'ok' ) {
+        throw $resp.IODATA
+    }
+}
+Export-ModuleMember -Function Remove-OTWSMS-PagePermanently
