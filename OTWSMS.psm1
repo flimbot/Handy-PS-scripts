@@ -351,14 +351,14 @@ Export-ModuleMember -Function Load-OTWSMS-AsyncJobs
 function Get-OTWSMS-Pages {
     #Based on RQL of PAGE/xsearch
     param(
-        [Parameter(Mandatory=$False)][ValidateRange(1,60)][int] $PageSize,
-        [Parameter(Mandatory=$False)][ValidateRange(1,500)][int] $MaxHits,
+        [Parameter(Mandatory=$False)][ValidateRange(1,60)][int] $PageSize = 60,
+        [Parameter(Mandatory=$False)][ValidateRange(1,500)][int] $MaxHits = 100,
         [Parameter(Mandatory=$False)][int] $PageId,
 		[Parameter(Mandatory=$False)][ValidateSet("linked","unlinked","recyclebin","active","all")][String] $SpecialPageType,        
         [Parameter(Mandatory=$False)][ValidateSet("checkedout","waitingforrelease","waitingforcorrection","pagesinworkflow","resubmitted","released")][String] $PageState
     )
     
-    $req = [xml]"<PAGE action=`"xsearch`" orderby=`"headline`" orderdirection=`"ASC`" pagesize=`"60`" maxhits=`"60`" page=`"1`"><SEARCHITEMS></SEARCHITEMS></PAGE>"
+    $req = [xml]"<PAGE action=`"xsearch`" orderby=`"headline`" orderdirection=`"ASC`" pagesize=`"$PageSize`" maxhits=`"$MaxHits`" page=`"1`"><SEARCHITEMS></SEARCHITEMS></PAGE>"
     
     if($PageSize) { $req.PAGE.pagesize = $PageSize.ToString() }
     if($MaxHits)  { $req.PAGE.maxhits = $MaxHits.ToString() }
