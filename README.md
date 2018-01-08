@@ -34,6 +34,15 @@ cp AGOL.psm1 ($moduledir + "\AGOL\AGOL.psm1")
  - Get-OTWSMS-Projects 
  - Open-OTWSMS-Session
  - Open-OTWSMS-Project
+ - Load-OTWSMS-AsyncJobCategories
+ - Load-OTWSMS-AsyncJobs
+ - Get-OTWSMS-Pages
+ - Get-OTWSMS-Page
+ - Disconnect-OTWSMS-Page
+ - Get-OTWSMS-ConnectionToPage
+ - Get-OTWSMS-ConnectionFromPage
+ - Remove-OTWSMS-Page
+ - Remove-OTWSMS-PagePermanently
  
 ## MortgageChoiceBanking - Access to accounts in Mortgage Choice
 **In development - Not a module yet**
