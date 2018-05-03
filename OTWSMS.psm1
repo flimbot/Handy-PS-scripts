@@ -348,6 +348,8 @@ Function Get-OTWSMS-AsyncJobs {
 }
 Export-ModuleMember -Function Load-OTWSMS-AsyncJobs
 
+#TODO Content Class filter
+#Date filter
 function Get-OTWSMS-Pages {
     #Based on RQL of PAGE/xsearch
     param(
@@ -355,7 +357,16 @@ function Get-OTWSMS-Pages {
         [Parameter(Mandatory=$False)][ValidateRange(1,500)][int] $MaxHits = 100,
         [Parameter(Mandatory=$False)][int] $PageId,
 		[Parameter(Mandatory=$False)][ValidateSet("linked","unlinked","recyclebin","active","all")][String] $SpecialPageType,        
-        [Parameter(Mandatory=$False)][ValidateSet("checkedout","waitingforrelease","waitingforcorrection","pagesinworkflow","resubmitted","released")][String] $PageState
+        [Parameter(Mandatory=$False)][ValidateSet("checkedout","waitingforrelease","waitingforcorrection","pagesinworkflow","resubmitted","released")][String] $PageState,
+
+        [Parameter(Mandatory=$False)][DateTime] $MinDateCreated,
+        [Parameter(Mandatory=$False)][DateTime] $MaxDateCreated,
+
+        [Parameter(Mandatory=$False)][DateTime] $MinDateModified,
+        [Parameter(Mandatory=$False)][DateTime] $MaxDateModified,
+
+
+        [Parameter(Mandatory=$False)][ValidateScript({$_ -match $GuidRegex})][string] $ContentClassGuid
     )
     
     $req = [xml]"<PAGE action=`"xsearch`" orderby=`"headline`" orderdirection=`"ASC`" pagesize=`"$PageSize`" maxhits=`"$MaxHits`" page=`"1`"><SEARCHITEMS></SEARCHITEMS></PAGE>"
@@ -374,6 +385,27 @@ function Get-OTWSMS-Pages {
     if($PageState) {
         $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"pagestate`" value=`"$PageState`" operator=`"eq`" users=`"all`"/>"
     }
+    
+    if($MinDateCreated) {
+        $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"createdate`" value=`"$($MinDateCreated.ToOADate())`" operator=`"gt`"/>"
+    }
+
+    if($MaxDateCreated) {
+        $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"createdate`" value=`"$($MaxDateCreated.ToOADate())`" operator=`"lt`"/>"
+    }
+
+    if($MinDateModified) {
+        $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"changedate`" value=`"$($MinDateModified.ToOADate())`" operator=`"gt`"/>"
+    }
+
+    if($MaxDateModified) {
+        $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"changedate`" value=`"$($MaxDateModified.ToOADate())`" operator=`"lt`"/>"
+    }
+
+    if($ContentClassGuid) {
+        $req.SelectSingleNode("/PAGE/SEARCHITEMS").InnerXml += "<SEARCHITEM key=`"contentclassguid`" value=`"$ContentClassGuid`" operator=`"eq`"/>"
+    }
+
     
     #implicit first page
     #write-host $req.OuterXml
@@ -406,7 +438,7 @@ function Get-OTWSMS-Page {
         #[Parameter(Mandatory=$False)][ValidateScript({$_ -match $GuidRegex})][int]$PageID
     )
     
-	$Page = Execute-OTWSMS-RQL -RQLString "<PAGE action=`"load`" guid=`"$PageGuid`" option=`"extendedinfo`"/>"
+	$Page = Execute-OTWSMS-RQL -RQLString "<PAGE action=`"load`" guid=`"$PageGuid`" option=`"extendedinfo`" contentbased=`"1`"/>"
     $Page.IODATA.PAGE
 }
 Export-ModuleMember -Function Get-OTWSMS-Page
@@ -491,3 +523,4 @@ function Remove-OTWSMS-PagePermanently {
     }
 }
 Export-ModuleMember -Function Remove-OTWSMS-PagePermanently
+
