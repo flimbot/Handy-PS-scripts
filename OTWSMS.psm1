@@ -421,6 +421,8 @@ function Get-OTWSMS-Pages {
     $ListOfPages.IODATA.PAGES.PAGE | ?{$_.guid}
     
     $loops = [math]::ceiling([int]($ListOfPages.IODATA.PAGES.hits) / [int]($ListOfPages.IODATA.PAGES.pagesize))
+    $searchguid = $ListOfPages.IODATA.PAGES.searchguid
+    $req.PAGE.SetAttribute("searchguid",$searchguid)
 
     for($i=2;$i -lt $loops;$i++) {
         $req.PAGE.SetAttribute("page",$i.ToString())
