@@ -1,6 +1,6 @@
-# Handy-PS-modules
+# Handy-PS-scripts
 
-These are just some PowerShell modules which I've created to make my work life a little easier.
+These are just some PowerShell scripts and modeuls which I've created to make my work life a little easier.
 Note that they may not be related systems, so I'm just keeping this repository generic.
 
 I don't claim to be the best PowerShell scripter around, so don't expect anything magical.
